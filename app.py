@@ -12,10 +12,10 @@ def home():
     return f"""
     <html>
         <head>
-            <title>{APP_NAME}</title>
+            <title>{Stalin-App}</title>
         </head>
         <body>
-            <h1>Welcome to {APP_NAME}!</h1>
+            <h1>Welcome to {Stalin-App}!</h1>
             <p>This Python application is running inside Docker.</p>
             <p>Environment: {APP_ENV}</p>
             <p>Application status: Running</p>
