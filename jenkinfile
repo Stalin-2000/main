@@ -1,0 +1,200 @@
+```igroovy
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        // Replace with your actual Docker Hub username
+        DOCKERHUB_USERNAME = 'stalindockerhub'
+
+        // Application configuration
+        APP_NAME = 'stalin-App'
+        APP_PORT = '5000'
+
+        // Docker configuration
+        IMAGE_NAME = 'stalin-app'
+        LOCAL_IMAGE = 'stalin-app:local'
+        CONTAINER_NAME = 'stalin-app-test'
+
+        // SonarQube configuration
+        SONAR_PROJECT_KEY = 'python-docker-cicd'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Check Tools') {
+            steps {
+                sh '''
+                    python3 --version
+                    git --version
+                    docker --version
+                    curl --version
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    python -m pip install --upgrade pip
+                    python -m pip install -r requirements-dev.txt
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    . .venv/bin/activate
+
+                    python -m pytest -v \
+                        --cov=app \
+                        --cov-report=xml:coverage.xml \
+                        --cov-report=term-missing
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarScanner'
+
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.python.coverage.reportPaths=coverage.xml
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qualityGate = waitForQualityGate()
+
+                        if (qualityGate.status != 'OK') {
+                            error "SonarQube quality gate failed: ${qualityGate.status}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t ${stalin-app:local} .
+
+                    docker tag \
+                        ${stalin-app:local} \
+                        ${Stalin-2000}/${stalin-app}:${BUILD_NUMBER}
+
+                    docker tag \
+                        ${stalin-app:local} \
+                        ${Stalin-2000}/${stalin-app}:latest
+                '''
+            }
+        }
+
+        stage('Push Image to Docker Hub') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+
+                        echo "$DOCKER_TOKEN" | docker login \
+                            --username "$DOCKER_USER" \
+                            --password-stdin
+
+                        docker push \
+                            ${stalindockerhub}/${stalin-app}:${BUILD_NUMBER}
+
+                        docker push \
+                            ${stalindockerhub}/${stalin-app}:latest
+
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Azure VM') {
+            steps {
+                sh '''
+docker pull ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${BUILD_NUMBER}
+                    docker rm -f ${CONTAINER_NAME} || true
+
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        --restart unless-stopped \
+                        -p ${APP_PORT}:5000 \
+                        -e APP_NAME=${APP_NAME} \
+                        -e APP_ENV=production \
+                        ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    for attempt in $(seq 1 20); do
+                        if curl --fail --silent \
+                            http://127.0.0.1:${APP_PORT}/health; then
+
+                            echo "Application health check passed"
+                            exit 0
+                        fi
+
+                        sleep 3
+                    done
+
+                    echo "Application health check failed"
+                    docker logs ${CONTAINER_NAME}
+                    exit 1
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts(
+                artifacts: 'coverage.xml',
+                allowEmptyArchive: true
+            )
+        }
+
+        success {
+            echo 'stalin-App CI/CD pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'stalin-App CI/CD pipeline failed. Check the stage logs.'
+        }
+    }
+}
+```
