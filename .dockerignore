@@ -1,0 +1,10 @@
+.venv/
+.git/
+__pycache__/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.env
+requirements-dev.txt
+test_app.py
