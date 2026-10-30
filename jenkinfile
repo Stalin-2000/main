@@ -129,7 +129,7 @@ pipeline {
                             --password-stdin
 
                         docker push \
-                            ${stalindockerhub}/${stalin-app}:${BUILD_NUMBER}
+                            ${stalindockerhub}/${stalin-app}:${latest}
 
                         docker push \
                             ${stalindockerhub}/${stalin-app}:latest
