@@ -129,10 +129,10 @@ pipeline {
                             --password-stdin
 
                         docker push \
-                            ${stalindockerhub}/${stalin-app}:${latest}
+                            ${stalindockerhub}/${stalin-app}:${15}
 
                         docker push \
-                            ${stalindockerhub}/${stalin-app}:latest
+                            ${stalindockerhub}/${stalin-app}:15
 
                         docker logout
                     '''
