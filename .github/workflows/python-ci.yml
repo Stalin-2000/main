@@ -4,7 +4,7 @@ name: My First GitHub Actions Workflow
 on:
   push:
     branches:
-      - main
+      - feature-login
 
 jobs:
   test:
